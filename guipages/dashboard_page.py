@@ -1,139 +1,43 @@
-from PySide6.QtWidgets import (
-    QWidget,
-    QLabel,
-    QVBoxLayout,
-    QHBoxLayout,
-    QFrame
-)
-
+from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QFrame,QLabel,QGridLayout
 from modules.database import Database
 
-
 class DashboardPage(QWidget):
-
     def __init__(self):
-
         super().__init__()
-
-        self.db = Database()
-
-        self.build_ui()
-
-    # ---------------------------------------------------------
-
-    def build_ui(self):
-
-        main = QVBoxLayout(self)
-
-        title = QLabel("Dashboard")
-
-        title.setStyleSheet("""
-            font-size:30px;
-            font-weight:bold;
-            padding-bottom:15px;
-        """)
-
-        main.addWidget(title)
-
-        cards = QHBoxLayout()
-
-        cards.addWidget(
-            self.create_card(
-                "📧",
-                "Email archiviate",
-                str(self.db.total_emails())
-            )
-        )
-
-        cards.addWidget(
-            self.create_card(
-                "🏢",
-                "Aziende",
-                str(self.db.total_domains())
-            )
-        )
-
-        cards.addWidget(
-            self.create_card(
-                "📅",
-                "Ultimo contatto",
-                str(self.db.last_email())
-            )
-        )
-
-        cards.addWidget(
-            self.create_card(
-                "🔄",
-                "Stato",
-                "READY"
-            )
-        )
-
-        main.addLayout(cards)
-
-        placeholder = QFrame()
-
-        placeholder.setMinimumHeight(320)
-
-        placeholder.setStyleSheet("""
-            QFrame{
-                background:white;
-                border:1px solid #d8d8d8;
-                border-radius:10px;
-            }
-        """)
-
-        box = QVBoxLayout()
-
-        lbl = QLabel("Area grafici e statistiche")
-
-        lbl.setStyleSheet("""
-            font-size:18px;
-            color:#666;
-        """)
-
-        box.addWidget(lbl)
-
-        box.addStretch()
-
-        placeholder.setLayout(box)
-
-        main.addWidget(placeholder)
-
-        main.addStretch()
-
-    # ---------------------------------------------------------
-
-    def create_card(self, icon, title, value):
-
-        card = QFrame()
-
-        card.setMinimumHeight(110)
-
-        card.setStyleSheet("""
-            QFrame{
-                background:white;
-                border:1px solid #dcdcdc;
-                border-radius:12px;
-            }
-        """)
-
-        layout = QVBoxLayout(card)
-
-        i = QLabel(icon)
-        i.setStyleSheet("font-size:28px;")
-
-        t = QLabel(title)
-        t.setStyleSheet("font-size:13px;color:#666;")
-
-        v = QLabel(value)
-        v.setStyleSheet("""
-            font-size:24px;
-            font-weight:bold;
-        """)
-
-        layout.addWidget(i)
-        layout.addWidget(t)
-        layout.addWidget(v)
-
-        return card
+        self.db=Database()
+        self.setStyleSheet("""
+QFrame#Card,QFrame#Panel{background:white;border:1px solid #dde3ea;border-radius:12px;}
+QLabel#Value{font:700 24px 'Segoe UI';color:#1f2937;}
+QLabel#Caption{font:10pt 'Segoe UI';color:#6b7280;}
+QLabel#PanelTitle{font:700 11pt 'Segoe UI';color:#374151;}
+""")
+        root=QVBoxLayout(self)
+        root.setContentsMargins(18,18,18,18)
+        root.setSpacing(16)
+        cards=QHBoxLayout()
+        cards.setSpacing(14)
+        cards.addWidget(self.card("Emails",str(self.db.total_emails())))
+        cards.addWidget(self.card("Companies",str(self.db.total_domains())))
+        cards.addWidget(self.card("Last contact",str(self.db.last_email())[:10]))
+        cards.addWidget(self.card("Status","READY"))
+        root.addLayout(cards)
+        grid=QGridLayout()
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(16)
+        grid.addWidget(self.panel("Recent emails"),0,0)
+        grid.addWidget(self.panel("Latest companies"),0,1)
+        grid.addWidget(self.panel("Activity"),1,0,1,2)
+        root.addLayout(grid)
+    def card(self,title,value):
+        f=QFrame(objectName="Card")
+        l=QVBoxLayout(f)
+        l.addWidget(QLabel(title,objectName="Caption"))
+        l.addStretch()
+        l.addWidget(QLabel(value,objectName="Value"))
+        return f
+    def panel(self,title):
+        f=QFrame(objectName="Panel")
+        l=QVBoxLayout(f)
+        l.addWidget(QLabel(title,objectName="PanelTitle"))
+        l.addStretch()
+        return f
