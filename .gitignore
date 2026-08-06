@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+logs/
+exports/
+.vscode/
+Microsoft VS Code/
+*.db-wal
+*.db-shm
