@@ -58,7 +58,12 @@ QPushButton#MenuButton:checked {
     font-weight:700;
 }
 
-QFrame#TopBar,
+QFrame#TopBar {
+    background:white;
+    border:none;
+    border-bottom:1px solid %s;
+}
+
 QFrame#Card,
 QFrame#Panel,
 QStatusBar {
@@ -75,4 +80,4 @@ QLabel#PageTitle {
 QLabel#Secondary {
     color:%s;
 }
-""" % (BACKGROUND,BACKGROUND,TEXT,SIDEBAR,PRIMARY,BORDER,MUTED)
+""" % (BACKGROUND, BACKGROUND, TEXT, SIDEBAR, PRIMARY, BORDER, BORDER, MUTED)
