@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QDate
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -14,6 +14,9 @@ from PySide6.QtWidgets import (
     QDialog,
     QTextEdit,
     QDialogButtonBox,
+    QDateEdit,
+    QCheckBox,
+    QScrollArea,
 )
 
 from modules.database import Database
@@ -27,7 +30,7 @@ class ProspectDialog(QDialog):
         self.prospect_id = prospect_id
 
         self.setWindowTitle("Prospect details")
-        self.setMinimumWidth(520)
+        self.resize(980, 780)
 
         self.setStyleSheet("""
             QDialog {
@@ -46,6 +49,12 @@ class ProspectDialog(QDialog):
                 font-weight: 700;
             }
 
+            QLabel#SectionTitle {
+                color: #374151;
+                font-size: 13px;
+                font-weight: 700;
+            }
+
             QLabel#Caption {
                 color: #6B7280;
                 font-size: 10pt;
@@ -58,6 +67,23 @@ class ProspectDialog(QDialog):
                 border: 1px solid #DCE3EA;
                 border-radius: 8px;
                 padding: 8px 10px;
+            }
+
+            QTableWidget {
+                background: white;
+                border: none;
+                gridline-color: #EEF1F4;
+                selection-background-color: #E8F6FB;
+                selection-color: #1F2937;
+            }
+
+            QHeaderView::section {
+                background: #F7F9FC;
+                color: #6B7280;
+                border: none;
+                border-bottom: 1px solid #DCE3EA;
+                padding: 8px;
+                font-weight: 600;
             }
 
             QPushButton#Save {
@@ -73,8 +99,26 @@ class ProspectDialog(QDialog):
         prospect = self.db.get_prospect(prospect_id)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 20, 20, 20)
-        root.setSpacing(14)
+        root.setContentsMargins(10, 10, 10, 10)
+        root.setSpacing(8)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(10, 10, 10, 10)
+        content_layout.setSpacing(14)
+
+        scroll.setWidget(content)
+        root.addWidget(scroll, 1)
 
         card = QFrame()
         card.setObjectName("Card")
@@ -124,6 +168,7 @@ class ProspectDialog(QDialog):
         self.status.addItems([
             "New",
             "Contacted",
+            "Follow-up needed",
             "Qualified",
             "Customer",
         ])
@@ -137,14 +182,171 @@ class ProspectDialog(QDialog):
         layout.addWidget(QLabel("Notes", objectName="Caption"))
         self.notes = QTextEdit()
         self.notes.setPlaceholderText("Add notes about this prospect...")
-        self.notes.setMinimumHeight(120)
+        self.notes.setMinimumHeight(90)
 
         if prospect:
             self.notes.setPlainText(prospect["notes"] or "")
 
         layout.addWidget(self.notes)
+        content_layout.addWidget(card)
 
-        root.addWidget(card)
+        followup_card = QFrame()
+        followup_card.setObjectName("Card")
+        followup_layout = QVBoxLayout(followup_card)
+        followup_layout.setContentsMargins(20, 16, 20, 16)
+        followup_layout.setSpacing(8)
+
+        followup_title = QLabel("Next action")
+        followup_title.setObjectName("SectionTitle")
+        followup_layout.addWidget(followup_title)
+
+        followup_row = QHBoxLayout()
+        followup_row.setSpacing(10)
+
+        self.next_action_date = QDateEdit()
+        self.next_action_date.setCalendarPopup(True)
+        self.next_action_date.setDisplayFormat("dd/MM/yyyy")
+
+        self.next_action_note = QLineEdit()
+        self.next_action_note.setPlaceholderText(
+            "What should be done next?"
+        )
+
+        self.no_next_action = QCheckBox("No date")
+        self.no_next_action.setChecked(True)
+
+        followup_row.addWidget(self.next_action_date)
+        followup_row.addWidget(self.next_action_note, 1)
+        followup_row.addWidget(self.no_next_action)
+
+        followup_layout.addLayout(followup_row)
+        content_layout.addWidget(followup_card)
+
+        if prospect:
+            saved_date = prospect["next_action_date"] or ""
+            if saved_date:
+                date = QDate.fromString(saved_date, "yyyy-MM-dd")
+                if date.isValid():
+                    self.next_action_date.setDate(date)
+                    self.no_next_action.setChecked(False)
+            else:
+                self.no_next_action.setChecked(True)
+
+            self.next_action_note.setText(
+                prospect["next_action_note"] or ""
+            )
+
+        self.next_action_date.setEnabled(
+            not self.no_next_action.isChecked()
+        )
+        self.no_next_action.toggled.connect(
+            self.next_action_date.setDisabled
+        )
+
+        contacts_card = QFrame()
+        contacts_card.setObjectName("Card")
+        contacts_layout = QVBoxLayout(contacts_card)
+        contacts_layout.setContentsMargins(20, 16, 20, 16)
+        contacts_layout.setSpacing(8)
+
+        contacts_title = QLabel("Contacts")
+        contacts_title.setObjectName("SectionTitle")
+
+        self.contacts_table = QTableWidget(0, 4)
+        self.contacts_table.setHorizontalHeaderLabels([
+            "Name",
+            "Email",
+            "Emails",
+            "Last contact",
+        ])
+        self.contacts_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+        self.contacts_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+        self.contacts_table.verticalHeader().setVisible(False)
+        self.contacts_table.setMinimumHeight(150)
+        self.contacts_table.setMaximumHeight(190)
+
+        contacts_header = self.contacts_table.horizontalHeader()
+        contacts_header.setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        contacts_header.setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch
+        )
+        contacts_header.setSectionResizeMode(
+            2, QHeaderView.ResizeMode.ResizeToContents
+        )
+        contacts_header.setSectionResizeMode(
+            3, QHeaderView.ResizeMode.ResizeToContents
+        )
+
+        contacts_layout.addWidget(contacts_title)
+        contacts_layout.addWidget(self.contacts_table)
+        content_layout.addWidget(contacts_card)
+
+        history_card = QFrame()
+        history_card.setObjectName("Card")
+        history_layout = QVBoxLayout(history_card)
+        history_layout.setContentsMargins(20, 16, 20, 16)
+        history_layout.setSpacing(8)
+
+        history_top = QHBoxLayout()
+
+        history_title = QLabel("Email history")
+        history_title.setObjectName("SectionTitle")
+
+        self.history_filter = QLabel("All contacts")
+        self.history_filter.setObjectName("Caption")
+
+        self.show_all_button = QPushButton("Show all")
+        self.show_all_button.setObjectName("Secondary")
+        self.show_all_button.setCursor(Qt.PointingHandCursor)
+
+        history_top.addWidget(history_title)
+        history_top.addStretch()
+        history_top.addWidget(self.history_filter)
+        history_top.addWidget(self.show_all_button)
+
+        self.history_table = QTableWidget(0, 3)
+        self.history_table.setHorizontalHeaderLabels([
+            "Date",
+            "Recipient",
+            "Subject",
+        ])
+        self.history_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+        self.history_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+        self.history_table.verticalHeader().setVisible(False)
+        self.history_table.setMinimumHeight(170)
+        self.history_table.setMaximumHeight(230)
+
+        history_header = self.history_table.horizontalHeader()
+        history_header.setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        history_header.setSectionResizeMode(
+            1, QHeaderView.ResizeMode.ResizeToContents
+        )
+        history_header.setSectionResizeMode(
+            2, QHeaderView.ResizeMode.Stretch
+        )
+
+        history_layout.addLayout(history_top)
+        history_layout.addWidget(self.history_table)
+        content_layout.addWidget(history_card, 1)
+
+        self.contacts_table.itemSelectionChanged.connect(
+            self.contact_selected
+        )
+        self.show_all_button.clicked.connect(
+            self.show_all_history
+        )
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Cancel
@@ -160,7 +362,88 @@ class ProspectDialog(QDialog):
         buttons.rejected.connect(self.reject)
         save_button.clicked.connect(self.save)
 
-        root.addWidget(buttons)
+        content_layout.addWidget(buttons)
+        content_layout.addStretch()
+
+        self.load_activity()
+
+    def load_activity(self):
+        domain = self.domain.text()
+
+        contacts = self.db.get_prospect_contacts(domain)
+        self.contacts_table.setRowCount(0)
+
+        for contact in contacts:
+            row = self.contacts_table.rowCount()
+            self.contacts_table.insertRow(row)
+
+            values = [
+                contact["recipient_name"] or "-",
+                contact["recipient_email"] or "-",
+                str(contact["email_count"]),
+                str(contact["last_contact"] or "-")[:16],
+            ]
+
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(str(value))
+                if column == 0:
+                    item.setData(
+                        Qt.ItemDataRole.UserRole,
+                        contact["recipient_email"],
+                    )
+                self.contacts_table.setItem(row, column, item)
+
+        self.show_all_history()
+
+    def show_all_history(self):
+        domain = self.domain.text()
+        self.history_filter.setText("All contacts")
+        history = self.db.get_prospect_emails(domain, 100)
+        self._populate_history(history)
+
+    def contact_selected(self):
+        row = self.contacts_table.currentRow()
+
+        if row < 0:
+            return
+
+        email_item = self.contacts_table.item(row, 0)
+        recipient_email = email_item.data(Qt.ItemDataRole.UserRole)
+
+        if not recipient_email:
+            return
+
+        domain = self.domain.text()
+        history = self.db.get_contact_emails(
+            domain,
+            recipient_email,
+            100,
+        )
+
+        self.history_filter.setText(
+            f"Filtered: {recipient_email}"
+        )
+        self._populate_history(history)
+
+    def _populate_history(self, history):
+        self.history_table.setRowCount(0)
+
+        for email in history:
+            row = self.history_table.rowCount()
+            self.history_table.insertRow(row)
+
+            values = [
+                str(email["sent_date"] or "-")[:16],
+                email["recipient_name"] or email["recipient_email"] or "-",
+                email["subject"] or "(No subject)",
+            ]
+
+            for column, value in enumerate(values):
+                self.history_table.setItem(
+                    row,
+                    column,
+                    QTableWidgetItem(str(value)),
+                )
 
     def save(self):
         self.db.save_prospect(
@@ -169,6 +452,12 @@ class ProspectDialog(QDialog):
             self.industry.currentText(),
             self.status.currentText(),
             self.notes.toPlainText(),
+            (
+                ""
+                if self.no_next_action.isChecked()
+                else self.next_action_date.date().toString("yyyy-MM-dd")
+            ),
+            self.next_action_note.text(),
         )
         self.accept()
 

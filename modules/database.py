@@ -46,11 +46,29 @@ class Database:
             )
         """)
 
+        self._ensure_prospect_columns()
+
         self.connection.commit()
 
         # Create prospect records automatically for domains already
         # present in the email database.
         self._sync_domains_to_prospects()
+
+    def _ensure_prospect_columns(self):
+        self.cursor.execute("PRAGMA table_info(prospects)")
+        columns = {row["name"] for row in self.cursor.fetchall()}
+
+        if "next_action_date" not in columns:
+            self.cursor.execute("""
+                ALTER TABLE prospects
+                ADD COLUMN next_action_date TEXT DEFAULT ''
+            """)
+
+        if "next_action_note" not in columns:
+            self.cursor.execute("""
+                ALTER TABLE prospects
+                ADD COLUMN next_action_note TEXT DEFAULT ''
+            """)
 
     def _sync_domains_to_prospects(self):
         self.cursor.execute("""
@@ -214,6 +232,24 @@ class Database:
         """)
         return self.cursor.fetchone()[0]
 
+    def get_followups(self, limit=8):
+        """Return prospects with a scheduled next action, nearest first."""
+        self.cursor.execute("""
+            SELECT
+                id,
+                domain,
+                company_name,
+                status,
+                next_action_date,
+                next_action_note
+            FROM prospects
+            WHERE next_action_date <> ''
+            ORDER BY next_action_date ASC, company_name ASC, domain ASC
+            LIMIT ?
+        """, (limit,))
+
+        return self.cursor.fetchall()
+
     def get_prospects(self, search="", status="All statuses", industry="All industries"):
         query = """
             SELECT
@@ -280,6 +316,77 @@ class Database:
 
         return self.cursor.fetchone()
 
+    def get_prospect_contacts(self, domain):
+        """
+        Return unique contacts for a prospect.
+
+        The email address is the identity key. Outlook can store different
+        display names for the same mailbox, so we deliberately group only
+        by recipient_email and use the name from the most recent email.
+        """
+        self.cursor.execute("""
+            SELECT
+                COALESCE(
+                    (
+                        SELECT TRIM(e2.recipient_name, '''\"''')
+                        FROM emails e2
+                        WHERE e2.domain = e.domain
+                          AND e2.recipient_email = e.recipient_email
+                          AND TRIM(e2.recipient_name, '''\"''') <> ''
+                          AND INSTR(
+                              TRIM(e2.recipient_name, '''\"'''),
+                              '@'
+                          ) = 0
+                        ORDER BY e2.sent_date DESC, e2.id DESC
+                        LIMIT 1
+                    ),
+                    e.recipient_email
+                ) AS recipient_name,
+                e.recipient_email,
+                COUNT(*) AS email_count,
+                MAX(e.sent_date) AS last_contact
+            FROM emails e
+            WHERE e.domain = ?
+              AND e.recipient_email <> ''
+            GROUP BY e.recipient_email
+            ORDER BY last_contact DESC, e.recipient_email ASC
+        """, (domain,))
+
+        return self.cursor.fetchall()
+
+    def get_prospect_emails(self, domain, limit=100):
+        """Return the email history associated with a prospect domain."""
+        self.cursor.execute("""
+            SELECT
+                recipient_name,
+                recipient_email,
+                subject,
+                sent_date
+            FROM emails
+            WHERE domain = ?
+            ORDER BY sent_date DESC
+            LIMIT ?
+        """, (domain, limit))
+
+        return self.cursor.fetchall()
+
+    def get_contact_emails(self, domain, recipient_email, limit=100):
+        """Return email history for one contact inside a prospect."""
+        self.cursor.execute("""
+            SELECT
+                recipient_name,
+                recipient_email,
+                subject,
+                sent_date
+            FROM emails
+            WHERE domain = ?
+              AND recipient_email = ?
+            ORDER BY sent_date DESC
+            LIMIT ?
+        """, (domain, recipient_email, limit))
+
+        return self.cursor.fetchall()
+
     def save_prospect(
         self,
         prospect_id,
@@ -287,6 +394,8 @@ class Database:
         industry,
         status,
         notes,
+        next_action_date="",
+        next_action_note="",
     ):
         now = self._now()
 
@@ -297,6 +406,8 @@ class Database:
                 industry = ?,
                 status = ?,
                 notes = ?,
+                next_action_date = ?,
+                next_action_note = ?,
                 updated_at = ?
             WHERE id = ?
         """, (
@@ -304,6 +415,8 @@ class Database:
             industry.strip(),
             status.strip(),
             notes.strip(),
+            next_action_date.strip(),
+            next_action_note.strip(),
             now,
             prospect_id,
         ))

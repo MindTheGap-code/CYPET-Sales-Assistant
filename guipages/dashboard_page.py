@@ -1,3 +1,5 @@
+from datetime import datetime, date
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget,
@@ -9,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from modules.database import Database
+from guipages.prospect_page import ProspectDialog
 
 
 class DashboardPage(QWidget):
@@ -23,6 +26,17 @@ class DashboardPage(QWidget):
                 background: white;
                 border: 1px solid #DCE3EA;
                 border-radius: 12px;
+            }
+
+            QFrame#FollowupItem {
+                background: #F8FAFC;
+                border: 1px solid #E5EAF0;
+                border-radius: 8px;
+            }
+
+            QFrame#FollowupItem:hover {
+                background: #EEF8FC;
+                border: 1px solid #B8DFEE;
             }
 
             QLabel#CardTitle {
@@ -56,6 +70,22 @@ class DashboardPage(QWidget):
             QLabel#ItemMeta {
                 color: #6B7280;
                 font-size: 9pt;
+            }
+
+            QLabel#FollowupCompany {
+                color: #1F2937;
+                font-size: 10pt;
+                font-weight: 700;
+            }
+
+            QLabel#FollowupAction {
+                color: #374151;
+                font-size: 9.5pt;
+            }
+
+            QLabel#FollowupDate {
+                font-size: 9pt;
+                font-weight: 700;
             }
         """)
 
@@ -105,11 +135,13 @@ class DashboardPage(QWidget):
 
         self.recent_panel = self.panel("Recent emails")
         self.companies_panel = self.panel("Latest companies")
+        self.followup_panel = self.panel("Follow-up")
         self.activity_panel = self.panel("Activity")
 
         grid.addWidget(self.recent_panel, 0, 0)
         grid.addWidget(self.companies_panel, 0, 1)
-        grid.addWidget(self.activity_panel, 1, 0, 1, 2)
+        grid.addWidget(self.followup_panel, 1, 0)
+        grid.addWidget(self.activity_panel, 1, 1)
 
         root.addLayout(grid)
 
@@ -196,6 +228,90 @@ class DashboardPage(QWidget):
 
         layout.addWidget(item)
 
+    def _add_followup(self, layout, row):
+        item = QFrame()
+        item.setObjectName("FollowupItem")
+        item.setCursor(Qt.PointingHandCursor)
+
+        item_layout = QVBoxLayout(item)
+        item_layout.setContentsMargins(10, 8, 10, 8)
+        item_layout.setSpacing(2)
+
+        company = row["company_name"] or row["domain"] or "-"
+        action = row["next_action_note"] or "No action specified"
+        raw_date = row["next_action_date"] or ""
+
+        status_text, status_color = self._followup_status(raw_date)
+
+        company_label = QLabel(company)
+        company_label.setObjectName("FollowupCompany")
+
+        action_label = QLabel(action)
+        action_label.setObjectName("FollowupAction")
+        action_label.setWordWrap(True)
+
+        date_label = QLabel(
+            f"{self._format_date(raw_date)} · {status_text}"
+        )
+        date_label.setObjectName("FollowupDate")
+        date_label.setStyleSheet(
+            f"color:{status_color};font-size:9pt;font-weight:700;"
+        )
+
+        item_layout.addWidget(company_label)
+        item_layout.addWidget(action_label)
+        item_layout.addWidget(date_label)
+
+        # Open the existing Prospect detail dialog when the follow-up is clicked.
+        prospect_id = row["id"]
+
+        def open_prospect(event):
+            dialog = ProspectDialog(
+                self.db,
+                prospect_id,
+                self,
+            )
+            if dialog.exec():
+                self.refresh()
+
+        item.mousePressEvent = open_prospect
+
+        layout.addWidget(item)
+
+    @staticmethod
+    def _parse_date(value):
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            return None
+
+    def _followup_status(self, value):
+        target = self._parse_date(value)
+
+        if target is None:
+            return "No date", "#6B7280"
+
+        today = date.today()
+
+        if target < today:
+            days = (today - target).days
+            return f"Overdue · {days}d", "#DC2626"
+
+        if target == today:
+            return "Today", "#EA580C"
+
+        days = (target - today).days
+        return f"In {days}d", "#16A34A"
+
+    @staticmethod
+    def _format_date(value):
+        target = DashboardPage._parse_date(value)
+
+        if target is None:
+            return "-"
+
+        return target.strftime("%d/%m/%Y")
+
     def refresh(self):
         total_emails = self.db.total_emails()
         total_domains = self.db.total_domains()
@@ -214,7 +330,11 @@ class DashboardPage(QWidget):
         if recent:
             for row in recent:
                 subject = row["subject"] or "(No subject)"
-                recipient = row["recipient_email"] or row["recipient_name"] or "-"
+                recipient = (
+                    row["recipient_email"]
+                    or row["recipient_name"]
+                    or "-"
+                )
                 self._add_item(
                     self.recent_panel.body,
                     subject,
@@ -243,6 +363,20 @@ class DashboardPage(QWidget):
                 self.companies_panel.body,
                 "No companies",
                 "No company data available",
+            )
+
+        self._clear_layout(self.followup_panel.body)
+
+        followups = self.db.get_followups(5)
+
+        if followups:
+            for row in followups:
+                self._add_followup(self.followup_panel.body, row)
+        else:
+            self._add_item(
+                self.followup_panel.body,
+                "No follow-ups scheduled",
+                "Open a Prospect to add a next action",
             )
 
         self._clear_layout(self.activity_panel.body)
