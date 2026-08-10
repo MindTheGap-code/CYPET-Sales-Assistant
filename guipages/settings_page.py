@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSettings
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
 class SettingsPage(QWidget):
     def __init__(self):
         super().__init__()
+
+        self.settings = QSettings("CYPET", "SalesAssistant")
 
         self.setStyleSheet("""
             QFrame#Header,
@@ -61,6 +63,10 @@ class SettingsPage(QWidget):
                 font-weight: 600;
             }
 
+            QPushButton#Primary:hover {
+                background: #008FC4;
+            }
+
             QPushButton#Secondary {
                 background: #EEF4F8;
                 color: #374151;
@@ -105,19 +111,17 @@ class SettingsPage(QWidget):
         general_title = QLabel("General")
         general_title.setObjectName("SectionTitle")
 
-        company = QLineEdit()
-        company.setPlaceholderText("Company name")
-        company.setText("CYPET")
+        self.company = QLineEdit()
+        self.company.setPlaceholderText("Company name")
 
-        user = QLineEdit()
-        user.setPlaceholderText("User name")
-        user.setText("Sandro Rasi")
+        self.user = QLineEdit()
+        self.user.setPlaceholderText("User name")
 
         general_layout.addWidget(general_title)
         general_layout.addWidget(QLabel("Company", objectName="Caption"))
-        general_layout.addWidget(company)
+        general_layout.addWidget(self.company)
         general_layout.addWidget(QLabel("User", objectName="Caption"))
-        general_layout.addWidget(user)
+        general_layout.addWidget(self.user)
 
         root.addWidget(general)
 
@@ -131,31 +135,89 @@ class SettingsPage(QWidget):
         sync_title = QLabel("Synchronization")
         sync_title.setObjectName("SectionTitle")
 
-        outlook_check = QCheckBox("Enable Outlook synchronization")
-        outlook_check.setChecked(True)
+        self.outlook_check = QCheckBox(
+            "Enable Outlook synchronization"
+        )
 
-        auto_sync = QCheckBox("Synchronize automatically")
-        auto_sync.setChecked(True)
+        self.auto_sync = QCheckBox(
+            "Synchronize automatically"
+        )
 
         sync_layout.addWidget(sync_title)
-        sync_layout.addWidget(outlook_check)
-        sync_layout.addWidget(auto_sync)
+        sync_layout.addWidget(self.outlook_check)
+        sync_layout.addWidget(self.auto_sync)
 
         root.addWidget(sync)
 
         actions = QHBoxLayout()
         actions.addStretch()
 
-        cancel = QPushButton("Cancel")
-        cancel.setObjectName("Secondary")
-        cancel.setCursor(Qt.PointingHandCursor)
+        self.cancel = QPushButton("Cancel")
+        self.cancel.setObjectName("Secondary")
+        self.cancel.setCursor(Qt.PointingHandCursor)
 
-        save = QPushButton("Save settings")
-        save.setObjectName("Primary")
-        save.setCursor(Qt.PointingHandCursor)
+        self.save = QPushButton("Save settings")
+        self.save.setObjectName("Primary")
+        self.save.setCursor(Qt.PointingHandCursor)
 
-        actions.addWidget(cancel)
-        actions.addWidget(save)
+        actions.addWidget(self.cancel)
+        actions.addWidget(self.save)
 
         root.addLayout(actions)
         root.addStretch()
+
+        self.save.clicked.connect(self.save_settings)
+        self.cancel.clicked.connect(self.load_settings)
+
+        self.load_settings()
+
+    def load_settings(self):
+        self.company.setText(
+            self.settings.value("company", "CYPET")
+        )
+        self.user.setText(
+            self.settings.value("user", "Sandro Rasi")
+        )
+
+        self.outlook_check.setChecked(
+            self.settings.value(
+                "outlook_enabled", True, type=bool
+            )
+        )
+
+        self.auto_sync.setChecked(
+            self.settings.value(
+                "auto_sync", True, type=bool
+            )
+        )
+
+    def save_settings(self):
+        self.settings.setValue(
+            "company",
+            self.company.text().strip() or "CYPET",
+        )
+        self.settings.setValue(
+            "user",
+            self.user.text().strip() or "Sandro Rasi",
+        )
+        self.settings.setValue(
+            "outlook_enabled",
+            self.outlook_check.isChecked(),
+        )
+        self.settings.setValue(
+            "auto_sync",
+            self.auto_sync.isChecked(),
+        )
+        self.settings.sync()
+
+        self.save.setText("Saved ✓")
+
+        self._restore_save_button()
+
+    def _restore_save_button(self):
+        from PySide6.QtCore import QTimer
+
+        QTimer.singleShot(
+            1800,
+            lambda: self.save.setText("Save settings"),
+        )

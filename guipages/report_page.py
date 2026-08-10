@@ -1,10 +1,25 @@
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFrame,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QFileDialog,
+)
+
+from modules.database import Database
 
 
 class ReportPage(QWidget):
     def __init__(self):
         super().__init__()
+
+        self.db = Database()
 
         self.setStyleSheet("""
             QFrame#Header,
@@ -47,12 +62,33 @@ class ReportPage(QWidget):
                 font-weight: 600;
             }
 
+            QPushButton#Primary:hover {
+                background: #008FC4;
+            }
+
             QPushButton#Secondary {
                 background: #EEF4F8;
                 color: #374151;
                 border: none;
                 border-radius: 8px;
                 padding: 9px 18px;
+                font-weight: 600;
+            }
+
+            QTableWidget {
+                background: white;
+                border: none;
+                gridline-color: #EEF1F4;
+                selection-background-color: #E8F6FB;
+                selection-color: #1F2937;
+            }
+
+            QHeaderView::section {
+                background: #F7F9FC;
+                color: #6B7280;
+                border: none;
+                border-bottom: 1px solid #DCE3EA;
+                padding: 9px;
                 font-weight: 600;
             }
         """)
@@ -84,16 +120,16 @@ class ReportPage(QWidget):
         header_layout.addLayout(text_layout)
         header_layout.addStretch()
 
-        export_button = QPushButton("Export")
-        export_button.setObjectName("Secondary")
-        export_button.setCursor(Qt.PointingHandCursor)
+        self.export_button = QPushButton("Export")
+        self.export_button.setObjectName("Secondary")
+        self.export_button.setCursor(Qt.PointingHandCursor)
 
-        refresh_button = QPushButton("Refresh")
-        refresh_button.setObjectName("Primary")
-        refresh_button.setCursor(Qt.PointingHandCursor)
+        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button.setObjectName("Primary")
+        self.refresh_button.setCursor(Qt.PointingHandCursor)
 
-        header_layout.addWidget(export_button)
-        header_layout.addWidget(refresh_button)
+        header_layout.addWidget(self.export_button)
+        header_layout.addWidget(self.refresh_button)
 
         root.addWidget(header)
 
@@ -104,26 +140,10 @@ class ReportPage(QWidget):
         summary_layout.setContentsMargins(20, 18, 20, 18)
         summary_layout.setSpacing(40)
 
-        metrics = [
-            ("Emails", "0"),
-            ("Companies", "0"),
-            ("Prospects", "0"),
-            ("Activities", "0"),
-        ]
-
-        for title_text, value_text in metrics:
-            metric = QVBoxLayout()
-            metric.setSpacing(3)
-
-            metric_title = QLabel(title_text)
-            metric_title.setObjectName("MetricTitle")
-
-            metric_value = QLabel(value_text)
-            metric_value.setObjectName("MetricValue")
-
-            metric.addWidget(metric_title)
-            metric.addWidget(metric_value)
-            summary_layout.addLayout(metric)
+        self.email_value = self._metric(summary_layout, "Emails")
+        self.company_value = self._metric(summary_layout, "Companies")
+        self.prospect_value = self._metric(summary_layout, "Prospects")
+        self.activity_value = self._metric(summary_layout, "Activities")
 
         summary_layout.addStretch()
         root.addWidget(summary)
@@ -135,18 +155,114 @@ class ReportPage(QWidget):
         report_layout.setContentsMargins(20, 18, 20, 18)
         report_layout.setSpacing(12)
 
-        report_title = QLabel("Sales report")
+        report_title = QLabel("Company activity")
         report_title.setObjectName("Title")
 
-        report_text = QLabel(
-            "No report data available yet."
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels([
+            "Company / Domain",
+            "Contacts",
+            "Last contact",
+        ])
+        self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
         )
-        report_text.setObjectName("Caption")
-        report_text.setAlignment(Qt.AlignCenter)
+        self.table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+        self.table.verticalHeader().setVisible(False)
+
+        table_header = self.table.horizontalHeader()
+        table_header.setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch
+        )
+        table_header.setSectionResizeMode(
+            1, QHeaderView.ResizeMode.ResizeToContents
+        )
+        table_header.setSectionResizeMode(
+            2, QHeaderView.ResizeMode.ResizeToContents
+        )
 
         report_layout.addWidget(report_title)
-        report_layout.addStretch()
-        report_layout.addWidget(report_text)
-        report_layout.addStretch()
+        report_layout.addWidget(self.table)
 
         root.addWidget(report, 1)
+
+        self.refresh_button.clicked.connect(self.refresh_data)
+        self.export_button.clicked.connect(self.export_report)
+
+        self.refresh_data()
+
+    def _metric(self, layout, title):
+        metric = QVBoxLayout()
+        metric.setSpacing(3)
+
+        metric_title = QLabel(title)
+        metric_title.setObjectName("MetricTitle")
+
+        metric_value = QLabel("0")
+        metric_value.setObjectName("MetricValue")
+
+        metric.addWidget(metric_title)
+        metric.addWidget(metric_value)
+        layout.addLayout(metric)
+
+        return metric_value
+
+    def refresh_data(self):
+        emails = self.db.total_emails()
+        companies = self.db.total_domains()
+        domains = self.db.get_domains(5000)
+
+        self.email_value.setText(str(emails))
+        self.company_value.setText(str(companies))
+        self.prospect_value.setText(str(companies))
+        self.activity_value.setText(str(emails))
+
+        self.table.setRowCount(0)
+
+        for row_data in domains:
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+
+            values = [
+                row_data["domain"] or "-",
+                str(row_data["total"]),
+                str(row_data["last_contact"] or "-")[:16],
+            ]
+
+            for column, value in enumerate(values):
+                self.table.setItem(
+                    row,
+                    column,
+                    QTableWidgetItem(str(value)),
+                )
+
+    def export_report(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export report",
+            "cypet_sales_report.csv",
+            "CSV files (*.csv)",
+        )
+
+        if not path:
+            return
+
+        import csv
+
+        with open(path, "w", newline="", encoding="utf-8-sig") as file:
+            writer = csv.writer(file, delimiter=";")
+            writer.writerow([
+                "Company / Domain",
+                "Contacts",
+                "Last contact",
+            ])
+
+            for row in range(self.table.rowCount()):
+                writer.writerow([
+                    self.table.item(row, 0).text(),
+                    self.table.item(row, 1).text(),
+                    self.table.item(row, 2).text(),
+                ])
