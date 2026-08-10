@@ -161,8 +161,7 @@ class ProspectPage(QWidget):
         top.addWidget(self.count)
 
         empty = QLabel(
-            "No prospects available yet.
-"
+            "No prospects available yet.\n"
             "Use the search and filters above to find potential customers."
         )
         empty.setObjectName("Caption")
