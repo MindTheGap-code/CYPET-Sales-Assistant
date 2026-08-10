@@ -4,70 +4,74 @@ from modules.database import Database
 
 
 class Scanner:
-
     def __init__(self):
         self.outlook = OutlookReader()
         self.database = Database()
 
     def scan(self, limit=100):
-
         messages = self.outlook.get_last_messages(limit)
 
         imported = 0
         skipped = 0
 
         for mail in messages:
-
             try:
-
                 for recipient in mail.Recipients:
+                    email = self._get_recipient_email(recipient)
 
-                    email = ""
-
-                    try:
-
-                        address = recipient.AddressEntry
-
-                        if address.Type == "EX":
-
-                            ex = address.GetExchangeUser()
-
-                            if ex:
-                                email = ex.PrimarySmtpAddress
-                            else:
-                                email = address.Address
-
-                        else:
-                            email = address.Address
-
-                    except:
-                        email = recipient.Address
-
-                    domain = ""
-
-                    if "@" in email:
-                        domain = email.split("@")[1].lower()
-
-                    # Esclude i domini interni
-                    if domain in EXCLUDED_DOMAINS:
+                    if not email:
+                        skipped += 1
                         continue
 
-                    if self.database.insert_email(
+                    domain = self._get_domain(email)
+
+                    if domain in EXCLUDED_DOMAINS:
+                        skipped += 1
+                        continue
+
+                    inserted = self.database.insert_email(
                         mail.EntryID,
                         str(mail.SentOn),
                         recipient.Name,
                         email,
                         domain,
-                        mail.Subject
-                    ):
+                        mail.Subject,
+                    )
 
+                    if inserted:
                         imported += 1
-
                     else:
-
                         skipped += 1
 
             except Exception:
-                pass
+                skipped += 1
 
         return imported, skipped
+
+    @staticmethod
+    def _get_recipient_email(recipient):
+        try:
+            address_entry = recipient.AddressEntry
+
+            if address_entry.Type == "EX":
+                exchange_user = address_entry.GetExchangeUser()
+
+                if exchange_user:
+                    return exchange_user.PrimarySmtpAddress or ""
+
+                return address_entry.Address or ""
+
+            return address_entry.Address or ""
+
+        except Exception:
+            try:
+                return recipient.Address or ""
+            except Exception:
+                return ""
+
+    @staticmethod
+    def _get_domain(email):
+        if "@" not in email:
+            return ""
+
+        return email.rsplit("@", 1)[1].strip().lower()
