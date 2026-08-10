@@ -2,37 +2,36 @@ import win32com.client
 
 
 class OutlookReader:
+    SENT_FOLDER = 5
+    MAIL_ITEM_CLASS = 43
 
     def __init__(self):
-
         self.outlook = win32com.client.Dispatch("Outlook.Application")
         self.namespace = self.outlook.GetNamespace("MAPI")
-        self.sent = self.namespace.GetDefaultFolder(5)
+        self.sent = self.namespace.GetDefaultFolder(self.SENT_FOLDER)
 
     def get_last_messages(self, number=10):
-
         items = self.sent.Items
         items.Sort("[SentOn]", True)
 
         result = []
 
-        count = 0
-
         for mail in items:
-
-            if count >= number:
+            if len(result) >= number:
                 break
 
             try:
-
-                if mail.Class != 43:
+                if mail.Class != self.MAIL_ITEM_CLASS:
                     continue
 
                 result.append(mail)
 
-                count += 1
-
-            except:
-                pass
+            except Exception:
+                continue
 
         return result
+
+    def close(self):
+        self.outlook = None
+        self.namespace = None
+        self.sent = None
