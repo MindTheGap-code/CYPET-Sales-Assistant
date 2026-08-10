@@ -9,16 +9,11 @@ class Database:
         self.db_folder.mkdir(parents=True, exist_ok=True)
 
         self.db_path = self.db_folder / "csa.db"
-
         self.connection = sqlite3.connect(str(self.db_path))
         self.connection.row_factory = sqlite3.Row
         self.cursor = self.connection.cursor()
 
         self.create_tables()
-
-    # -------------------------------------------------
-    # CREAZIONE TABELLE
-    # -------------------------------------------------
 
     def create_tables(self):
         self.cursor.execute("""
@@ -32,12 +27,7 @@ class Database:
                 subject TEXT
             )
         """)
-
         self.connection.commit()
-
-    # -------------------------------------------------
-    # INSERIMENTO EMAIL
-    # -------------------------------------------------
 
     def insert_email(
         self,
@@ -67,23 +57,13 @@ class Database:
                 domain,
                 subject,
             ))
-
             self.connection.commit()
             return True
-
         except sqlite3.IntegrityError:
             return False
 
-    # -------------------------------------------------
-    # DASHBOARD
-    # -------------------------------------------------
-
     def total_emails(self):
-        self.cursor.execute("""
-            SELECT COUNT(*)
-            FROM emails
-        """)
-
+        self.cursor.execute("SELECT COUNT(*) FROM emails")
         return self.cursor.fetchone()[0]
 
     def total_domains(self):
@@ -92,23 +72,28 @@ class Database:
             FROM emails
             WHERE domain <> ''
         """)
-
         return self.cursor.fetchone()[0]
 
     def last_email(self):
-        self.cursor.execute("""
-            SELECT MAX(sent_date)
-            FROM emails
-        """)
-
+        self.cursor.execute("SELECT MAX(sent_date) FROM emails")
         row = self.cursor.fetchone()
         return row[0]
 
-    # -------------------------------------------------
-    # REPORT
-    # -------------------------------------------------
+    def get_recent_emails(self, limit=5):
+        self.cursor.execute("""
+            SELECT
+                recipient_name,
+                recipient_email,
+                domain,
+                subject,
+                sent_date
+            FROM emails
+            ORDER BY sent_date DESC
+            LIMIT ?
+        """, (limit,))
+        return self.cursor.fetchall()
 
-    def get_domains(self):
+    def get_domains(self, limit=5):
         self.cursor.execute("""
             SELECT
                 domain,
@@ -117,14 +102,10 @@ class Database:
             FROM emails
             WHERE domain <> ''
             GROUP BY domain
-            ORDER BY total DESC
-        """)
-
+            ORDER BY last_contact DESC
+            LIMIT ?
+        """, (limit,))
         return self.cursor.fetchall()
-
-    # -------------------------------------------------
-    # CONNECTION
-    # -------------------------------------------------
 
     def close(self):
         if self.connection:
