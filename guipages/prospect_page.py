@@ -10,9 +10,167 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
+    QComboBox,
+    QDialog,
+    QTextEdit,
+    QDialogButtonBox,
 )
 
 from modules.database import Database
+
+
+class ProspectDialog(QDialog):
+    def __init__(self, database, prospect_id, parent=None):
+        super().__init__(parent)
+
+        self.db = database
+        self.prospect_id = prospect_id
+
+        self.setWindowTitle("Prospect details")
+        self.setMinimumWidth(520)
+
+        self.setStyleSheet("""
+            QDialog {
+                background: #F4F6F9;
+            }
+
+            QFrame#Card {
+                background: white;
+                border: 1px solid #DCE3EA;
+                border-radius: 12px;
+            }
+
+            QLabel#Title {
+                color: #1F2937;
+                font-size: 20px;
+                font-weight: 700;
+            }
+
+            QLabel#Caption {
+                color: #6B7280;
+                font-size: 10pt;
+            }
+
+            QLineEdit,
+            QComboBox,
+            QTextEdit {
+                background: #F7F9FC;
+                border: 1px solid #DCE3EA;
+                border-radius: 8px;
+                padding: 8px 10px;
+            }
+
+            QPushButton#Save {
+                background: #00A3E0;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 9px 18px;
+                font-weight: 600;
+            }
+        """)
+
+        prospect = self.db.get_prospect(prospect_id)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 20, 20, 20)
+        root.setSpacing(14)
+
+        card = QFrame()
+        card.setObjectName("Card")
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(10)
+
+        title = QLabel("Prospect details")
+        title.setObjectName("Title")
+        layout.addWidget(title)
+
+        self.domain = QLabel(
+            prospect["domain"] if prospect else "-"
+        )
+        self.domain.setObjectName("Caption")
+        layout.addWidget(self.domain)
+
+        layout.addWidget(QLabel("Company", objectName="Caption"))
+        self.company = QLineEdit()
+        self.company.setText(
+            prospect["company_name"] if prospect else ""
+        )
+        layout.addWidget(self.company)
+
+        layout.addWidget(QLabel("Industry", objectName="Caption"))
+        self.industry = QComboBox()
+        self.industry.addItems([
+            "",
+            "PET Packaging",
+            "Beverage",
+            "Pharma",
+            "Cosmetics",
+            "Home Care",
+            "Partner",
+            "Other",
+        ])
+
+        if prospect:
+            index = self.industry.findText(prospect["industry"] or "")
+            self.industry.setCurrentIndex(max(index, 0))
+
+        layout.addWidget(self.industry)
+
+        layout.addWidget(QLabel("Status", objectName="Caption"))
+        self.status = QComboBox()
+        self.status.addItems([
+            "New",
+            "Contacted",
+            "Qualified",
+            "Customer",
+        ])
+
+        if prospect:
+            index = self.status.findText(prospect["status"] or "New")
+            self.status.setCurrentIndex(max(index, 0))
+
+        layout.addWidget(self.status)
+
+        layout.addWidget(QLabel("Notes", objectName="Caption"))
+        self.notes = QTextEdit()
+        self.notes.setPlaceholderText("Add notes about this prospect...")
+        self.notes.setMinimumHeight(120)
+
+        if prospect:
+            self.notes.setPlainText(prospect["notes"] or "")
+
+        layout.addWidget(self.notes)
+
+        root.addWidget(card)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Cancel
+        )
+
+        save_button = QPushButton("Save prospect")
+        save_button.setObjectName("Save")
+        buttons.addButton(
+            save_button,
+            QDialogButtonBox.ButtonRole.AcceptRole,
+        )
+
+        buttons.rejected.connect(self.reject)
+        save_button.clicked.connect(self.save)
+
+        root.addWidget(buttons)
+
+    def save(self):
+        self.db.save_prospect(
+            self.prospect_id,
+            self.company.text(),
+            self.industry.currentText(),
+            self.status.currentText(),
+            self.notes.toPlainText(),
+        )
+        self.accept()
 
 
 class ProspectPage(QWidget):
@@ -20,7 +178,7 @@ class ProspectPage(QWidget):
         super().__init__()
 
         self.db = Database()
-        self.all_domains = []
+        self.all_prospects = []
 
         self.setStyleSheet("""
             QFrame#Header,
@@ -112,7 +270,7 @@ class ProspectPage(QWidget):
         title.setObjectName("Title")
 
         subtitle = QLabel(
-            "Search and explore companies identified from your Outlook contacts."
+            "Search and manage companies identified from your Outlook contacts."
         )
         subtitle.setObjectName("Subtitle")
 
@@ -134,11 +292,9 @@ class ProspectPage(QWidget):
 
         search_button = QPushButton("Search")
         search_button.setObjectName("Primary")
-        search_button.setCursor(Qt.PointingHandCursor)
 
         clear_button = QPushButton("Clear")
         clear_button.setObjectName("Secondary")
-        clear_button.setCursor(Qt.PointingHandCursor)
 
         filters_layout.addWidget(self.search, 1)
         filters_layout.addWidget(search_button)
@@ -161,19 +317,28 @@ class ProspectPage(QWidget):
         self.count = QLabel("0 companies")
         self.count.setObjectName("Count")
 
+        self.edit_button = QPushButton("Open prospect")
+        self.edit_button.setObjectName("Secondary")
+        self.edit_button.setEnabled(False)
+
         top.addWidget(result_title)
         top.addStretch()
         top.addWidget(self.count)
+        top.addWidget(self.edit_button)
 
-        self.table = QTableWidget(0, 3)
+        self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels([
             "Company / Domain",
+            "Industry",
+            "Status",
             "Contacts",
-            "Last contact",
         ])
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(
             QTableWidget.SelectionBehavior.SelectRows
+        )
+        self.table.setSelectionMode(
+            QTableWidget.SelectionMode.SingleSelection
         )
         self.table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers
@@ -190,36 +355,37 @@ class ProspectPage(QWidget):
         table_header.setSectionResizeMode(
             2, QHeaderView.ResizeMode.ResizeToContents
         )
+        table_header.setSectionResizeMode(
+            3, QHeaderView.ResizeMode.ResizeToContents
+        )
 
         results_layout.addLayout(top)
         results_layout.addWidget(self.table)
 
         root.addWidget(results, 1)
 
-        search_button.clicked.connect(self.search_domains)
+        search_button.clicked.connect(self.search_prospects)
         clear_button.clicked.connect(self.clear_filters)
-        self.search.returnPressed.connect(self.search_domains)
+        self.search.returnPressed.connect(self.search_prospects)
+        self.table.itemDoubleClicked.connect(
+            lambda _: self.open_selected()
+        )
+        self.table.itemSelectionChanged.connect(
+            self._selection_changed
+        )
+        self.edit_button.clicked.connect(self.open_selected)
 
         self.refresh_data()
 
     def refresh_data(self):
-        self.all_domains = self.db.get_domains(5000)
-        self.populate_table(self.all_domains)
+        self.all_prospects = self.db.get_prospects()
+        self.populate_table(self.all_prospects)
 
-    def search_domains(self):
-        query = self.search.text().strip().lower()
+    def search_prospects(self):
+        query = self.search.text().strip()
 
-        if not query:
-            self.populate_table(self.all_domains)
-            return
-
-        filtered = [
-            row
-            for row in self.all_domains
-            if query in str(row["domain"] or "").lower()
-        ]
-
-        self.populate_table(filtered)
+        rows = self.db.get_prospects(search=query)
+        self.populate_table(rows)
 
     def populate_table(self, rows):
         self.table.setRowCount(0)
@@ -229,20 +395,46 @@ class ProspectPage(QWidget):
             self.table.insertRow(row)
 
             values = [
-                row_data["domain"] or "-",
-                str(row_data["total"]),
-                str(row_data["last_contact"] or "-")[:16],
+                row_data["company_name"] or row_data["domain"] or "-",
+                row_data["industry"] or "-",
+                row_data["status"] or "New",
+                str(row_data["contacts"]),
             ]
 
             for column, value in enumerate(values):
-                self.table.setItem(
-                    row,
-                    column,
-                    QTableWidgetItem(str(value)),
+                item = QTableWidgetItem(str(value))
+                item.setData(
+                    Qt.ItemDataRole.UserRole,
+                    row_data["id"],
                 )
+                self.table.setItem(row, column, item)
 
         self.count.setText(f"{len(rows)} companies")
+        self._selection_changed()
+
+    def _selection_changed(self):
+        self.edit_button.setEnabled(
+            self.table.currentRow() >= 0
+        )
+
+    def open_selected(self):
+        row = self.table.currentRow()
+
+        if row < 0:
+            return
+
+        item = self.table.item(row, 0)
+        prospect_id = item.data(Qt.ItemDataRole.UserRole)
+
+        dialog = ProspectDialog(
+            self.db,
+            prospect_id,
+            self,
+        )
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.refresh_data()
 
     def clear_filters(self):
         self.search.clear()
-        self.populate_table(self.all_domains)
+        self.refresh_data()
