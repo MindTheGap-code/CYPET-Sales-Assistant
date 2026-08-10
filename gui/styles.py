@@ -14,10 +14,13 @@ QMainWindow {
 }
 
 QWidget {
-    background:%s;
     font-family:'Segoe UI';
     font-size:10pt;
     color:%s;
+}
+
+QWidget#CentralWidget {
+    background:%s;
 }
 
 QFrame#Sidebar {
@@ -29,11 +32,13 @@ QLabel#LogoTitle {
     color:white;
     font-size:22px;
     font-weight:700;
+    background:transparent;
 }
 
 QLabel#LogoSubtitle {
     color:#D8E4EC;
     font-size:10pt;
+    background:transparent;
 }
 
 QPushButton {
@@ -75,9 +80,31 @@ QStatusBar {
 QLabel#PageTitle {
     font-size:20px;
     font-weight:700;
+    background:transparent;
 }
 
 QLabel#Secondary {
     color:%s;
+    background:transparent;
 }
-""" % (BACKGROUND, BACKGROUND, TEXT, SIDEBAR, PRIMARY, BORDER, BORDER, MUTED)
+
+QLabel#CardTitle,
+QLabel#PanelTitle,
+QLabel#PanelText,
+QLabel#Caption,
+QLabel#Subtitle,
+QLabel#Title,
+QLabel#MetricTitle,
+QLabel#MetricValue {
+    background:transparent;
+}
+""" % (
+        BACKGROUND,
+        TEXT,
+        BACKGROUND,
+        SIDEBAR,
+        PRIMARY,
+        BORDER,
+        BORDER,
+        MUTED,
+    )

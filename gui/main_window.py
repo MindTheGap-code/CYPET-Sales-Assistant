@@ -20,6 +20,7 @@ class MainWindow(QMainWindow):
 
     def build_ui(self):
         central = QWidget()
+        central.setObjectName("CentralWidget")
         self.setCentralWidget(central)
 
         main_layout = QHBoxLayout(central)
@@ -30,6 +31,8 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.sidebar)
 
         content = QWidget()
+        content.setObjectName("ContentArea")
+
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
