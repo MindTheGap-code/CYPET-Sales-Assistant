@@ -1,4 +1,10 @@
-from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QStackedWidget
+from PySide6.QtWidgets import (
+    QMainWindow,
+    QWidget,
+    QHBoxLayout,
+    QVBoxLayout,
+    QStackedWidget,
+)
 from gui.sidebar import Sidebar
 from gui.topbar import TopBar
 from guipages.dashboard_page import DashboardPage
@@ -6,16 +12,15 @@ from guipages.outlook_page import OutlookPage
 from guipages.prospect_page import ProspectPage
 from guipages.report_page import ReportPage
 from guipages.settings_page import SettingsPage
+from guipages.campaign_page import CampaignPage
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-
         self.setWindowTitle("CYPET Sales Assistant")
         self.resize(1400, 850)
         self.setMinimumSize(1100, 700)
-
         self.build_ui()
 
     def build_ui(self):
@@ -46,12 +51,14 @@ class MainWindow(QMainWindow):
         self.dashboard = DashboardPage()
         self.outlook = OutlookPage()
         self.prospect = ProspectPage()
+        self.campaign = CampaignPage()
         self.report = ReportPage()
         self.settings = SettingsPage()
 
         self.pages.addWidget(self.dashboard)
         self.pages.addWidget(self.outlook)
         self.pages.addWidget(self.prospect)
+        self.pages.addWidget(self.campaign)
         self.pages.addWidget(self.report)
         self.pages.addWidget(self.settings)
 
@@ -70,6 +77,9 @@ class MainWindow(QMainWindow):
         self.sidebar.buttons["prospect"].clicked.connect(
             lambda: self.show_page("prospect")
         )
+        self.sidebar.buttons["campaign"].clicked.connect(
+            lambda: self.show_page("campaign")
+        )
         self.sidebar.buttons["report"].clicked.connect(
             lambda: self.show_page("report")
         )
@@ -82,6 +92,7 @@ class MainWindow(QMainWindow):
             "dashboard": (self.dashboard, "Dashboard"),
             "outlook": (self.outlook, "Outlook"),
             "prospect": (self.prospect, "Prospect"),
+            "campaign": (self.campaign, "Campaigns"),
             "report": (self.report, "Report"),
             "settings": (self.settings, "Settings"),
         }

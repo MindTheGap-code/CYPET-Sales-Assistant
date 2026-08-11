@@ -6,3 +6,7 @@ exports/
 Microsoft VS Code/
 *.db-wal
 *.db-shm
+__pycache__/
+*.pyc
+*.backup_*
+database/csa.db
